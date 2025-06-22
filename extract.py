@@ -93,22 +93,22 @@ use_device = True
 drive_letter = "Z"
 image_file_path = "new.img"
 
-mft_offset = 34951168       # Change if needed
-cluster_size = 512 * 8      # 4KB
-max_records = 1000000       # Limit how deep to scan
+mft_offset = 34951168       
+cluster_size = 512 * 8      
+max_records = 1000000  
 
 if use_device:
     img_path = r"\\.\{}:".format(drive_letter)
 else:
     img_path = image_file_path
 
-# ---------- Output Setup ----------
+
 os.makedirs("output/recovered", exist_ok=True)
 os.makedirs("output/deleted", exist_ok=True)
 summary_lines = []
 all_found_files = []
 
-# ---------- Recovery Mode Prompt ----------
+
 print("\n[?] Do you want to:\n1. Recover all files\n2. Select specific files manually")
 choice = input("Enter 1 or 2: ").strip()
 recover_all = (choice == "1")
