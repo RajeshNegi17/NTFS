@@ -213,7 +213,7 @@ class NTFSRecoveryApp(tk.Tk):
         self.status_var = tk.StringVar(value="Ready.")
         self.mode_var = tk.StringVar(value='all')
         self.create_styles()
-        self.create_widgets()
+        self.create_scrollable_content()
         self.drive_var.set("")
 
     def create_styles(self):
@@ -227,13 +227,43 @@ class NTFSRecoveryApp(tk.Tk):
         style.configure("TRadiobutton", font=("Segoe UI", 13), background="#f4f4f4")
         style.configure("TCombobox", font=("Segoe UI", 13))
 
-    def create_widgets(self):
+    def create_scrollable_content(self):
+        # Create a canvas and a vertical scrollbar for scrolling
+        container = ttk.Frame(self)
+        container.pack(fill='both', expand=True)
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=1)
+        canvas = tk.Canvas(container, bg="#f4f4f4", highlightthickness=0, borderwidth=0)
+        vscroll = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        vscroll.grid(row=0, column=1, sticky="ns")
+        # Content frame inside canvas
+        self.content_frame = ttk.Frame(canvas, style="TFrame")
+        self.content_frame_id = canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
+        # Make content frame expand with canvas
+        def on_canvas_configure(event):
+            canvas.itemconfig(self.content_frame_id, width=event.width)
+        canvas.bind('<Configure>', on_canvas_configure)
+        # Update scrollregion when the content changes
+        def on_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        self.content_frame.bind("<Configure>", on_configure)
+        # Mousewheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        self.create_widgets(self.content_frame)
+        # Status bar/footer always visible
+        status_bar = tk.Label(self, textvariable=self.status_var, font=("Segoe UI", 13, "bold"), bg="#e0e0e0", anchor='w', relief='sunken', bd=2, height=2)
+        status_bar.pack(fill='x', side='bottom', pady=(0, 0))
+
+    def create_widgets(self, parent_frame):
         # Header
-        header = ttk.Label(self, text="NTFS File Recovery Tool", font=("Segoe UI", 22, "bold"), background="#f4f4f4", foreground="#333")
+        header = ttk.Label(parent_frame, text="NTFS File Recovery Tool", font=("Segoe UI", 22, "bold"), background="#f4f4f4", foreground="#333")
         header.pack(pady=(20, 10))
 
         # Drive selection
-        drive_frame = ttk.Frame(self, style="TFrame")
+        drive_frame = ttk.Frame(parent_frame, style="TFrame")
         drive_frame.pack(fill='x', padx=20, pady=10)
         ttk.Label(drive_frame, text="Select Drive:").pack(side='left', padx=(0, 10))
         self.drive_combo = ttk.Combobox(drive_frame, textvariable=self.drive_var, state='readonly', width=8)
@@ -244,7 +274,7 @@ class NTFSRecoveryApp(tk.Tk):
             self.drive_var.set(self.drive_combo['values'][0])
 
         # Recovery mode
-        mode_frame = ttk.Frame(self, style="TFrame")
+        mode_frame = ttk.Frame(parent_frame, style="TFrame")
         mode_frame.pack(fill='x', padx=20, pady=10)
         ttk.Label(mode_frame, text="Recovery Mode:").pack(side='left', padx=(0, 10))
         ttk.Radiobutton(mode_frame, text="Recover All", variable=self.mode_var, value='all', style="TRadiobutton").pack(side='left', padx=10)
@@ -252,8 +282,19 @@ class NTFSRecoveryApp(tk.Tk):
         scan_btn = ttk.Button(mode_frame, text="Scan Drive", command=self.scan_drive)
         scan_btn.pack(side='right', padx=10)
 
+        # Search bar
+        search_frame = ttk.Frame(parent_frame, style="TFrame")
+        search_frame.pack(fill='x', padx=20, pady=(0, 5))
+        ttk.Label(search_frame, text="Search File:").pack(side='left', padx=(0, 10))
+        self.search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_frame, textvariable=self.search_var, font=("Segoe UI", 13), width=40)
+        search_entry.pack(side='left', padx=5)
+        search_entry.bind('<KeyRelease>', self.update_file_filter)
+        recover_search_btn = ttk.Button(search_frame, text="Recover Searched", command=self.recover_searched)
+        recover_search_btn.pack(side='right', padx=10)
+
         # File list (Treeview with scrollbar)
-        list_frame = ttk.Frame(self, style="TFrame")
+        list_frame = ttk.Frame(parent_frame, style="TFrame")
         list_frame.pack(fill='both', expand=True, padx=20, pady=10)
         columns = ("Record ID", "Filename", "Status")
         self.tree = ttk.Treeview(list_frame, columns=columns, show='headings', selectmode='extended', height=15)
@@ -266,14 +307,10 @@ class NTFSRecoveryApp(tk.Tk):
         vsb.pack(side='right', fill='y')
 
         # Recovery button
-        btn_frame = ttk.Frame(self, style="TFrame")
+        btn_frame = ttk.Frame(parent_frame, style="TFrame")
         btn_frame.pack(fill='x', padx=20, pady=10)
         self.recover_btn = ttk.Button(btn_frame, text="Start Recovery", command=self.start_recovery)
         self.recover_btn.pack(side='right', padx=10)
-
-        # Status bar
-        status_bar = tk.Label(self, textvariable=self.status_var, font=("Segoe UI", 13, "bold"), bg="#e0e0e0", anchor='w', relief='sunken', bd=2, height=2)
-        status_bar.pack(fill='x', side='bottom', pady=(0, 0))
 
     def scan_drive(self):
         drive = self.drive_var.get()
@@ -306,6 +343,32 @@ class NTFSRecoveryApp(tk.Tk):
             selected_records = set(self.found_files[self.tree.index(i)][0] for i in selected_indices)
         drive = self.drive_var.get()
         self.status_var.set("Recovering files...")
+        def do_recover():
+            success, result = recover_selected_files(drive, selected_records)
+            if success:
+                self.status_var.set(f"Recovery complete. See report: {result}")
+                messagebox.showinfo("Success", f"Files recovered successfully.\nReport: {result}")
+            else:
+                self.status_var.set(f"Recovery failed: {result}")
+                messagebox.showerror("Error", f"Recovery failed: {result}")
+        threading.Thread(target=do_recover, daemon=True).start()
+
+    def update_file_filter(self, event=None):
+        search_text = self.search_var.get().lower()
+        self.tree.delete(*self.tree.get_children())
+        for rec_id, fname, status in self.found_files:
+            if search_text in fname.lower():
+                self.tree.insert('', 'end', values=(rec_id, fname, status))
+
+    def recover_searched(self):
+        # Recover all files currently visible in the filtered list
+        visible_items = self.tree.get_children()
+        if not visible_items:
+            messagebox.showwarning("No Files", "No files to recover in the current search.")
+            return
+        selected_records = set(int(self.tree.item(i)['values'][0]) for i in visible_items)
+        drive = self.drive_var.get()
+        self.status_var.set("Recovering searched files...")
         def do_recover():
             success, result = recover_selected_files(drive, selected_records)
             if success:
