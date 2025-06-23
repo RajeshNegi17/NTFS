@@ -1,0 +1,9 @@
+# NTFS Recovery Tool Requirements
+# Core dependencies (GUI uses tkinter which is included with Python)
+
+# Optional: For better GUI styling (if available)
+# ttkthemes>=3.2.2
+
+# For testing and development
+# pytest>=6.0.0
+# pytest-cov>=2.10.0 
