@@ -21,7 +21,7 @@ def get_cluster_size(drive_letter):
         ctypes.byref(num_free_clusters),
         ctypes.byref(total_clusters)
     )
-
+    
     if ret == 0:
         raise ctypes.WinError()
 
@@ -341,7 +341,6 @@ class NTFSRecoveryGUI(ctk.CTk):
             self.log(f"[+] Recovered: {fname} to {path}")
         except Exception as e:
             self.log(f"[!] Failed to recover {fname}: {e}")
-
 
 if __name__ == "__main__":
     app = NTFSRecoveryGUI()
